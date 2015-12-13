@@ -29,7 +29,8 @@ require Exporter;
 );
 
 our
-$VERSION = do { my @r = (q$Revision: 2.13 $ =~ /\d+/g); sprintf "%d."."%03d" x $#r, @r };
+# $VERSION = do { my @r = (q$Revision: 2.13 $ =~ /\d+/g); sprintf "%d."."%03d" x $#r, @r }; # CVS version
+$VERSION = 2.014;
 
 =pod
 
