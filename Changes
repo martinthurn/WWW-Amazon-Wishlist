@@ -1,3 +1,7 @@
+2015-12-13  Kingpin  <martin@localhost.localdomain>
+
+	*  added META.yml to distro
+
 2015-09-23  Kingpin  <Martin@EV-9D9>
 
 	* moved UK test file to xt folder (author only)
