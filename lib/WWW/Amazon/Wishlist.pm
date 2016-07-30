@@ -1,6 +1,4 @@
 
-# $Id: Wishlist.pm,v 2.13 2015-09-23 23:07:07 Martin Exp $
-
 package WWW::Amazon::Wishlist;
 
 use strict;
@@ -28,9 +26,8 @@ require Exporter;
         COM
 );
 
-our
-# $VERSION = do { my @r = (q$Revision: 2.13 $ =~ /\d+/g); sprintf "%d."."%03d" x $#r, @r }; # CVS version
-$VERSION = 2.014;
+my
+$VERSION = 2.015;
 
 =pod
 
