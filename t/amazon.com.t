@@ -8,7 +8,7 @@ use blib;
 use Data::Dumper;
 use Test::More 'no_plan';
 
-our $iDebug = 5;
+our $iDebug = 0;
 
 BEGIN
   {
