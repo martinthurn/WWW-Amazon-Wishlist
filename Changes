@@ -1,3 +1,7 @@
+2017-04-22  Kingpin  <martin@martin-M17x>
+
+	* Wishlist.pm: fixed parser(?) but Amazon server is inconsistent
+
 2015-12-13  Kingpin  <martin@localhost.localdomain>
 
 	*  added META.yml to distro
