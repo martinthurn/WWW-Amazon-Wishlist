@@ -14,6 +14,7 @@ use constant UK  => 1;
 
 use constant DEBUG => 0;
 use constant DEBUG_HTML => 0;
+use constant DEBUG_NEXT => 0;
 
 require Exporter;
 
@@ -228,12 +229,12 @@ sub get_list
     my $iNext = 0;
     if (! defined $sURLNext)
       {
-      # DEBUG && warn " DDD content===$content===\n";
+      # DEBUG_NEXT && warn " DDD no 'next' URL, content===$content===\n";
       # exit 88;
       # Use brute force to find it:
       if ($content =~ m!([;&]page=\d+)">\s*(<[^>]+>)?Next!)
         {
-        DEBUG && warn " DDD found next URL with brute force\n";
+        DEBUG_NEXT && warn " DDD found next URL with brute force\n";
         $sURLNext = $1;
         $iNext = $2;
         } # if
@@ -241,19 +242,19 @@ sub get_list
     # Paranoia:
     if (! defined $sURLNext)
       {
-      DEBUG && warn " WWW did not find next url\n";
+      DEBUG_NEXT && warn " WWW did not find next url\n";
       last INFINITE;
       } # if
     if ($sURLNext !~ m/[;&]page=(\d+)/)
       {
-      DEBUG && warn " WWW next url =$sURLNext= does not contain page#\n";
+      DEBUG_NEXT && warn " WWW next url =$sURLNext= does not contain page#\n";
       last INFINITE;
       } # if
     $iNext = $1;
     # More paranoia:
     if ($iNext <= $iPage)
       {
-      DEBUG && warn " WWW next url page=$iNext is not greater than current page=$iPage\n";
+      DEBUG_NEXT && warn " WWW next url page=$iNext is not greater than current page=$iPage\n";
       last INFINITE;
       } # if
     # ...and update:
@@ -568,22 +569,23 @@ sub _extract
   my @aoA = $oTree->look_down(_tag => 'a',
                               sub
                                 {
+                                return 0 if (length($_[0]->attr('href')) < 5);
                                 my $s = $_[0]->as_text || q{};
-                                DEBUG_HTML && warn " DDD   try next <A> ==$s==\n";
+                                # DEBUG_NEXT && warn " DDD   try next <A> ==$s==\n";
                                 $s =~ m/\A\s*NEXT/i;
                                 },
                              );
   my $iCountA = scalar(@aoA);
-  DEBUG_HTML && warn " DDD   found $iCountA <A> tags that match 'next'\n";
+  DEBUG_NEXT && warn " DDD   found $iCountA <A> tags that match 'next'\n";
   my $oA = shift @aoA;
   if (ref $oA)
     {
     $rh->{next} = $oA->attr('href');
-    DEBUG_HTML && warn " DDD raw next URL is ==$rh->{next}==\n";
+    DEBUG_NEXT && warn " DDD raw next URL is ==$rh->{next}==\n";
     } # if
   else
     {
-    DEBUG_HTML && warn " DDD did not find next URL\n";
+    DEBUG_NEXT && warn " DDD did not find next URL\n";
     }
   return $rh;
   } # _extract
