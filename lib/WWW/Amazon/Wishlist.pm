@@ -244,8 +244,7 @@ sub get_list {
     if ( ! defined $sURLNext)
       {
       DEBUG_NEXT && warn " WWW did not find next url\n";
-      eval "use File::Slurp";
-      write_file(qq'Pages/no-next.html', $content);
+      DEBUG_NEXT && write_file(qq'Pages/no-next.html', $content);
       last INFINITE;
       } # if
     if ($sURLNext !~ m/[;&]page=(\d+)/)
