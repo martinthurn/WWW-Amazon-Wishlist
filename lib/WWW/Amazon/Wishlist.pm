@@ -144,8 +144,7 @@ L<perl>, L<LWP::UserAgent>, L<amazonwish>
 
 my $USER_AGENT = 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)';
 
-sub get_list
-  {
+sub get_list {
   # Required arg = wishlist ID:
   my $id = shift || croak "No ID given to get_list() function\n";
   # Optional arg = whether we're accessing the UK site.  Default is "no":
@@ -205,6 +204,8 @@ sub get_list
       DEBUG && warn " WWW _extract() returned no items\n";
       last INFINITE;
       } # if
+    # Clean up the parsed items and add them to our local @items
+    # array:
  ITEM:
     foreach my $item (@{$result->{items}})
       {
@@ -224,6 +225,7 @@ sub get_list
         $item->{image} = q"http://images-eu.amazon.com/images/P/". $item->{image};
         } # if
       push @items, $item;
+      DEBUG_HTML && warn " DDD added one item to \@items\n";
       } # foreach ITEM
     my $sURLNext = $result->{next};
     my $iNext = 0;
@@ -232,17 +234,18 @@ sub get_list
       # DEBUG_NEXT && warn " DDD no 'next' URL, content===$content===\n";
       # exit 88;
       # Use brute force to find it:
-      if ($content =~ m!([;&]page=\d+)">\s*(<[^>]+>)?Next!)
+      if ($content =~ m!([;&]page=\d+)">\s*(<[^>]+>)?\s*Next!)
         {
         DEBUG_NEXT && warn " DDD found next URL with brute force\n";
         $sURLNext = $1;
-        $iNext = $2;
         } # if
       } # if
     # Paranoia:
-    if (! defined $sURLNext)
+    if ( ! defined $sURLNext)
       {
       DEBUG_NEXT && warn " WWW did not find next url\n";
+      eval "use File::Slurp";
+      write_file(qq'Pages/no-next.html', $content);
       last INFINITE;
       } # if
     if ($sURLNext !~ m/[;&]page=(\d+)/)
@@ -263,71 +266,69 @@ sub get_list
   return @items;
   } # get_list
 
-
-sub _fetch_page
-  {
-    my ($url, $domain) = @_;
-    if (0)
-      {
-      eval "use File::Slurp";
-      # For debugging UK site:
-      return read_file('Pages/uk-2008-12-page1.html');
-      # For debugging USA site:
-      return read_file('Pages/2008-12.html');
-      } # if 0
-    # Setting up the UA here is slower but makes the code easier to read
-    # really, the slow bit will not be setting up the UA each time
-
-    # set up the UA
-    my $ua = new LWP::UserAgent( keep_alive => 1, timeout => 30, agent => $USER_AGENT, );
-    # setting it in the 'new' seems not to work sometimes
-    $ua->agent($USER_AGENT);
-    # for some reason this makes stuff work
-    $ua->max_redirect( 0 );
-    # make a full set of headers
-    my $h = new HTTP::Headers(
-                              'Host'            => "www.amazon.$domain",
-                              'Referer'         => $url,
-                              'User-Agent'      => $USER_AGENT,
-                              'Accept'          => 'text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,video/x-mng,image/png,image/jpeg,image/gif;q=0.2,*/*;q=0.1',
-                              'Accept-Language' => 'en-us,en;q=0.5',
-                              'Accept-Charset'  => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
-                              #'Accept-Encoding' => 'gzip,deflate',
-                              'Keep-Alive'      =>  '300',
-                              'Connection'      =>  'keep-alive',
+sub _fetch_page {
+  my ($url, $domain) = @_;
+  if (0)
+    {
+    eval "use File::Slurp";
+    # For debugging UK site:
+    return read_file('Pages/uk-2008-12-page1.html');
+    # For debugging USA site:
+    return read_file('Pages/2008-12.html');
+    } # if 0
+  # Set up the UA:
+  my $ua = new LWP::UserAgent(
+                              keep_alive => 1,
+                              timeout => 30,
+                              agent => $USER_AGENT,
                              );
-    $h->referer("$url");
-    my $request  =  HTTP::Request->new ( 'GET', $url, $h );
-    my $response;
-    my $times = 0;
-    # LWP should be able to do this but seemingly fails sometimes
-    while ($times++<3)
+  # Setting it in the 'new' seems not to work sometimes
+  $ua->agent($USER_AGENT);
+  # For some reason, this makes stuff work:
+  # $ua->max_redirect( 0 );
+  # Make a full set of headers:
+  my $h = new HTTP::Headers(
+                            'Host'            => "www.amazon.$domain",
+                            'Referer'         => $url,
+                            'User-Agent'      => $USER_AGENT,
+                            'Accept'          => 'text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,video/x-mng,image/png,image/jpeg,image/gif;q=0.2,*/*;q=0.1',
+                            'Accept-Language' => 'en-us,en;q=0.5',
+                            'Accept-Charset'  => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                            #'Accept-Encoding' => 'gzip,deflate',
+                            'Keep-Alive'      =>  '300',
+                            'Connection'      =>  'keep-alive',
+                           );
+  $h->referer("$url");
+  my $request  =  HTTP::Request->new ( 'GET', $url, $h );
+  my $response;
+  my $times = 0;
+  # LWP should be able to do this but seemingly fails sometimes
+  while ($times++<3)
+    {
+    $response =  $ua->request($request);
+    last if $response->is_success;
+    if ($response->is_redirect)
       {
-      $response =  $ua->request($request);
-      last if $response->is_success;
-      if ($response->is_redirect)
-        {
-        $url = $response->header("Location");
-        #$h->header("Referer", $url); 
-        $h->referer("$url");
-        $request  =  HTTP::Request->new ( 'GET', $url, $h );
-        } # if
-      } # while
-    if (!$response->is_success)
-      {
-      croak "Failed to retrieve $url";
-      return undef;
+      $url = $response->header("Location");
+      #$h->header("Referer", $url); 
+      $h->referer("$url");
+      $request  =  HTTP::Request->new ( 'GET', $url, $h );
       } # if
-    my $s = $response->content;
-    # Clean the CRAP off the page:
-    $s =~ s!<script>.+?</script>!!gs;
-    return $s;
-    } # _fetch_page
+    } # while
+  if (!$response->is_success)
+    {
+    croak "Failed to retrieve $url";
+    return undef;
+    } # if
+  my $s = $response->content;
+  # Clean the CRAP off the page:
+  $s =~ s!<script>.+?</script>!!gs;
+  return $s;
+  } # _fetch_page
 
 # This is the HTML parsing version written by Martin Thurn:
 
-sub _extract
-  {
+sub _extract {
   # Required arg1 = whether we are parsing the UK site or not (Boolean):
   my $iUK = shift || 0;
   # Required arg2 = the HTML contents of the webpage:
@@ -349,12 +350,12 @@ sub _extract
                                         class => $sClass,
                                        );
   my $iCountSPAN = scalar(@aoSPAN);
-  DEBUG_HTML && warn " DDD   found $iCountSPAN $sTag tags of class '$sClass'\n";
+  DEBUG_HTML && warn " DDD _extract() found $iCountSPAN $sTag tags of class '$sClass'\n";
  SPAN_TAG:
   foreach my $oSPAN (@aoSPAN)
     {
     next SPAN_TAG unless ref $oSPAN;
-    DEBUG_HTML && warn " DDD found toplevel item tagset\n";
+    DEBUG_HTML && warn " DDD _extract() found toplevel item tagset\n";
     if (9 < DEBUG_HTML)
       {
       my $s = $oSPAN->as_HTML;
@@ -364,13 +365,13 @@ sub _extract
     my $sName = q{};
     my $sTitle = q{};
     my @aoA = $oSPAN->look_down(_tag => 'a');
-    DEBUG_HTML && warn sprintf(" DDD   contains %d <A> tags\n", scalar(@aoA));
+    DEBUG_HTML && warn sprintf(" DDD _extract(): oSPAN contains %d <A> tags\n", scalar(@aoA));
  A_TAG:
     foreach my $oA (@aoA)
       {
       next A_TAG if ! ref $oA;
       my $sA = $oA->as_HTML;
-      DEBUG_HTML && warn " DDD   try A\n";
+      DEBUG_HTML && warn " DDD _extract(): try A\n";
       if (9 < DEBUG_HTML)
         {
         warn " DDD ==$sA==\n";
@@ -384,11 +385,11 @@ sub _extract
       next A_TAG if ($sTitle !~ m/\S/);
       # Strip out zero-width spaces scattered about randomly in item titles
       $sTitle =~ s/\x{200b}//g;
-      DEBUG_HTML && warn " DDD found item named '$sTitle'\n";
+      DEBUG_HTML && warn " DDD _extract(): found item named '$sTitle'\n";
       next A_TAG if ($sTitle eq 'Universal Wish List Button');
       next A_TAG if ($sTitle eq 'Buying this gift elsewhere?');
       my $sURL = $oA->attr('href');
-      DEBUG_HTML && warn " DDD   URL ==$sURL==\n";
+      DEBUG_HTML && warn " DDD _extract(): URL ==$sURL==\n";
       if (
           ($sURL =~ m!/detail(?:/offer-listing)?/-/(.+?)/ref!)
           ||
@@ -406,7 +407,7 @@ sub _extract
         DEBUG_HTML && warn " EEE   url does not contain asin\n";
         }
       } # foreach A_TAG
-    DEBUG_HTML && warn " DDD   ASIN ==$sASIN==\n";
+    DEBUG_HTML && warn " DDD _extract(): ASIN ==$sASIN==\n";
     if ($sASIN eq q{})
       {
       next SPAN_TAG;
@@ -423,15 +424,15 @@ sub _extract
       next SPAN_TAG;
       } # if
     my $sParentHTML = $oParent->as_HTML;
-    DEBUG_HTML && warn " DDD   parent HTML ==$sParentHTML==\n";
+    DEBUG_HTML && warn " DDD _extract(): parent HTML ==$sParentHTML==\n";
     my $sParent = $oParent->as_text;
     # Manual text clean-up:
     $sParent =~ s/(DESIRED|RECEIVED|PRIORITY)/;  $1: /g;
-    DEBUG_HTML && warn " DDD   parent text ==$sParent==\n";
+    DEBUG_HTML && warn " DDD _extract(): parent text ==$sParent==\n";
     my $iDesired = _match_desired($sParent);
-    DEBUG_HTML && warn " DDD     desired set to =$iDesired=\n";
+    DEBUG_HTML && warn " DDD _extract():     desired set to =$iDesired=\n";
     my $sPriority = _match_priority($sParent);
-    DEBUG_HTML && warn " DDD     priority set to =$sPriority=\n";
+    DEBUG_HTML && warn " DDD _extract():     priority set to =$sPriority=\n";
     my @aoTDtiny = $oParent->look_down(_tag => 'td',
                                        class => 'tiny',
                                       );
@@ -440,11 +441,11 @@ sub _extract
       {
       next QUANT_TAG unless ref $oSPAN;
       my $sSpan = $oSPAN->as_text;
-      DEBUG_HTML && warn " DDD   TDtiny=$sSpan=\n";
+      DEBUG_HTML && warn " DDD _extract():   TDtiny=$sSpan=\n";
       $sPriority ||= _match_priority($sSpan);
-      DEBUG_HTML && warn " DDD     priority set to =$sPriority=\n";
+      DEBUG_HTML && warn " DDD _extract():     priority set to =$sPriority=\n";
       $iDesired ||= _match_desired($sSpan);
-      DEBUG_HTML && warn " DDD     desired set to =$iDesired=\n";
+      DEBUG_HTML && warn " DDD _extract():     desired set to =$iDesired=\n";
       } # foreach QUANT_TAG
     if (! $iDesired || ! $sPriority)
       {
@@ -453,7 +454,7 @@ sub _extract
       if ($sParentHTML =~ m!<option selected="yes" value=([-0-9]+)>!)
         {
         $sPriority = $1;
-        DEBUG_HTML && warn " DDD     priority set to =$sPriority=\n";
+        DEBUG_HTML && warn " DDD _extract():     priority set to =$sPriority=\n";
         } # if
       else
         {
@@ -463,7 +464,7 @@ sub _extract
       if ($sParentHTML =~ m!<input class="tiny" name="requestedQty.+?" size=\d+ type="text" value=(\d+)>!)
         {
         $iDesired = $1;
-        DEBUG_HTML && warn " DDD     desired set to =$iDesired=\n";
+        DEBUG_HTML && warn " DDD _extract():     desired set to =$iDesired=\n";
         } # if
       else
         {
@@ -472,14 +473,14 @@ sub _extract
       } # if
     # Put in default values if we never found them:
     $sPriority ||= 'medium';
-    DEBUG_HTML && warn " DDD     priority set to =$sPriority=\n";
+    DEBUG_HTML && warn " DDD _extract():     priority set to =$sPriority=\n";
     $iDesired ||= 1;
     # Find the date added:
     my $sDate = '';
     if ($sParentHTML =~ m!>added\s+(.+?)<!)
       {
       $sDate = $1;
-      DEBUG_HTML && warn " DDD   date=$sDate=\n";
+      DEBUG_HTML && warn " DDD _extract():   date=$sDate=\n";
       } # if
     else
       {
@@ -500,7 +501,7 @@ sub _extract
                                         sub
                                           {
                                           my $sHtml = $_[0]->as_HTML;
-                                          # DEBUG_HTML && warn " DDD   try oTDauthor span==$sHtml==\n";
+                                          # DEBUG_HTML && warn " DDD _extract():   try oTDauthor span==$sHtml==\n";
                                           my $s = $_[0]->attr('class') || q{};
                                           $s =~ m'BYLINE'i;
                                           },
@@ -512,7 +513,7 @@ sub _extract
       {
       next AUTHOR_TAG unless ref $oTD;
       my $s = $oTD->as_HTML;
-      DEBUG_HTML && warn " DDD   try oTDauthor==$s==\n";
+      DEBUG_HTML && warn " DDD _extract():   try oTDauthor==$s==\n";
       $s = $oTD->as_text;
       if ($s =~ s!\A\s*(by|~)\s+!!)
         {
@@ -520,7 +521,7 @@ sub _extract
         last AUTHOR_TAG;
         } # if
       } # foreach AUTHOR_TAG
-    DEBUG_HTML && warn " DDD   author=$sAuthor=\n";
+    DEBUG_HTML && warn " DDD _extract():   author=$sAuthor=\n";
     # Find the price of this item:
     my $sPrice = '';
     my $oTDprice = $oParent->look_down(_tag => 'span',
@@ -546,7 +547,7 @@ sub _extract
         } # if
       $sPrice =~ s!\A\s+!!;
       $sPrice =~ s!\s+\Z!!;
-      DEBUG_HTML && warn " DDD   price=$sPrice=\n";
+      DEBUG_HTML && warn " DDD _extract():   price=$sPrice=\n";
       } # else
     # Add this item to the result set:
     my %hsItem = (
@@ -560,6 +561,7 @@ sub _extract
                   # type => $sType,
                  );
     DEBUG_HTML && warn Dumper(\%hsItem);
+    # warn " DDD   _extract() added one item to \$rh->{items}\n";
     push @{$rh->{items}}, \%hsItem;
     # All done with this item:
     $oParent->detach;
@@ -571,44 +573,42 @@ sub _extract
                                 {
                                 return 0 if (length($_[0]->attr('href')) < 5);
                                 my $s = $_[0]->as_text || q{};
-                                # DEBUG_NEXT && warn " DDD   try next <A> ==$s==\n";
+                                # DEBUG_NEXT && warn " DDD _extract():   try next <A> ==$s==\n";
                                 $s =~ m/\A\s*NEXT/i;
                                 },
                              );
   my $iCountA = scalar(@aoA);
-  DEBUG_NEXT && warn " DDD   found $iCountA <A> tags that match 'next'\n";
+  DEBUG_NEXT && warn " DDD _extract():   found $iCountA <A> tags that match 'next'\n";
   my $oA = shift @aoA;
   if (ref $oA)
     {
     $rh->{next} = $oA->attr('href');
-    DEBUG_NEXT && warn " DDD raw next URL is ==$rh->{next}==\n";
+    DEBUG_NEXT && warn " DDD _extract(): raw next URL is ==$rh->{next}==\n";
     } # if
   else
     {
-    DEBUG_NEXT && warn " DDD did not find next URL\n";
+    DEBUG_NEXT && warn " DDD _extract(): did not find next URL\n";
     }
   return $rh;
   } # _extract
 
-sub _match_priority
+sub _match_priority {
+  my $s = shift || return;
+  if ($s =~ m'.+PRIORITY:?\s*(\w+?)(\s|\z)'i)
     {
-    my $s = shift || return;
-    if ($s =~ m'.+PRIORITY:?\s*(\w+?)(\s|\z)'i)
-      {
-      return lc $1;
-      } # if
-    return;
-    } # _match_priority
+    return lc $1;
+    } # if
+  return;
+  } # _match_priority
 
-sub _match_desired
-      {
-      my $s = shift || return;
-      if ($s =~ m'(?:DESIRED|WANTS):?\s*(\d+)'i)
-        {
-        return lc $1;
-        } # if
-      return;
-      } # _match_desired
+sub _match_desired {
+  my $s = shift || return;
+  if ($s =~ m'(?:DESIRED|WANTS):?\s*(\d+)'i)
+    {
+    return lc $1;
+    } # if
+  return;
+  } # _match_desired
 
 1;
 
