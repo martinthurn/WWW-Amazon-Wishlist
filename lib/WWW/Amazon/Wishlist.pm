@@ -338,13 +338,17 @@ sub _extract
   my $oTree = new HTML::TreeBuilder;
   $oTree->parse($s);
   $oTree->eof;
-  my @aoSPAN = $iUK ? $oTree->look_down(_tag => 'div',
+  my $sTag = q/div/;
+  my $sClass = q/a-text-left a-fixed-left-grid-col a-col-right/;
+  my @aoSPAN = $iUK ? $oTree->look_down(_tag => $sTag,
                                         class => 'a-text-left a-fixed-left-grid-col a-col-right',
                                         # class => 'lineItemGroup',
                                        )
-                    : $oTree->look_down(_tag => 'div',
-                                        class => 'a-text-left a-fixed-left-grid-col a-col-right',
+                    : $oTree->look_down(_tag => $sTag,
+                                        class => $sClass,
                                        );
+  my $iCountSPAN = scalar(@aoSPAN);
+  DEBUG_HTML && warn " DDD   found $iCountSPAN $sTag tags of class '$sClass'\n";
  SPAN_TAG:
   foreach my $oSPAN (@aoSPAN)
     {
@@ -561,14 +565,17 @@ sub _extract
     $oParent->delete;
     } # foreach SPAN_TAG
   # Look for the next-page link:
-  my $oA = $oTree->look_down(_tag => 'a',
-                             sub
-                               {
-                               my $s = $_[0]->as_text || q{};
-                               DEBUG_HTML && warn " DDD   try next <A> ==$s==\n";
-                               $s =~ m/\A\s*NEXT/i;
-                               },
-                            );
+  my @aoA = $oTree->look_down(_tag => 'a',
+                              sub
+                                {
+                                my $s = $_[0]->as_text || q{};
+                                DEBUG_HTML && warn " DDD   try next <A> ==$s==\n";
+                                $s =~ m/\A\s*NEXT/i;
+                                },
+                             );
+  my $iCountA = scalar(@aoA);
+  DEBUG_HTML && warn " DDD   found $iCountA <A> tags that match 'next'\n";
+  my $oA = shift @aoA;
   if (ref $oA)
     {
     $rh->{next} = $oA->attr('href');
