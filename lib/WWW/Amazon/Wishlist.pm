@@ -26,8 +26,8 @@ require Exporter;
         COM
 );
 
-my
-$VERSION = 2.015;
+our
+$VERSION = 2.016;
 
 =pod
 
@@ -182,7 +182,7 @@ sub get_list
     if (9 < $test)
       {
       eval "use File::Slurp";
-      write_file(qq'PAGES/fetched-$domain.html', $content);
+      write_file(qq'Pages/fetched-$domain.html', $content);
       exit 88;
       } # if
     my $iLen = length($content);
