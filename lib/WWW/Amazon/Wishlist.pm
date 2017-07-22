@@ -145,7 +145,6 @@ L<perl>, L<LWP::UserAgent>, L<amazonwish>
 =cut
 
 my $USER_AGENT = 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)';
-my $sBase = q'http://www.amazon.com';
 
 sub get_list {
   # Required arg = wishlist ID:
@@ -157,6 +156,7 @@ sub get_list {
   # Note to self ... should we UC the id? Nahhhh. Not yet.
   # fairly self explanatory
   my $domain = ($uk) ? "co.uk" : "com";
+  my $sBase = qq'http://www.amazon.$domain';
   # set up some variables
   my $iPage = 1;
   my @items;
@@ -165,7 +165,7 @@ sub get_list {
  INFINITE:
   while (1)
     {
-    $url ||= $uk ? "https://www.amazon.co.uk/gp/registry/wishlist/ref=cm_wl_search_1?page=$iPage&cid=$id" :
+    $url ||= $uk ? "$sBase/gp/registry/wishlist/ref=cm_wl_search_1?page=$iPage&cid=$id" :
     "$sBase/gp/registry/wishlist/$id";
     # This is a typical complete .com URL as of 2008-12:
     # http://www.amazon.com/gp/registry/wishlist/2O4B95NPM1W3L
@@ -194,9 +194,7 @@ sub get_list {
     my $iLen = length($content);
     # warn " DDD fetched $iLen bytes.\n";
 
-    # UPDATED 2014-11.  Both USA and UK sites use the same page
-    # format, therefore we always pass COM to the _extract() method:
-    my $result = _extract(COM, $content, $test);
+    my $result = _extract($uk, $content, $test);
     # print Dumper($result);
     # exit 88;
     if (! defined $result)
@@ -322,7 +320,9 @@ sub _extract {
   $oTree->eof;
   my $sTag = q/div/;
   my $sClass = q/a-fixed-left-grid a-spacing-none/;
-  $sClass = 'a-text-left a-fixed-left-grid-col a-col-right' if $iUK;
+  $sClass = q/a-text-left a-fixed-left-grid-col a-col-right/ if $iUK;
+  # $sClass = q/a-fixed-left-grid   a-spacing-large/ if $iUK;
+
   my @aoSPAN = $oTree->look_down(_tag => $sTag,
 				 class => $sClass,
       );
@@ -395,6 +395,7 @@ sub _extract {
                                   class => 'itemWrapper',
                                  )
                 : $oSPAN;
+    $oParent = $oSPAN;
     if (! ref $oParent)
       {
       DEBUG_HTML && warn " WWW did not find ancestor TBODY\n";
