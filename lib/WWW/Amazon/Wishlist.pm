@@ -5,7 +5,7 @@ use warnings;
 use strict;
 
 our
-$VERSION = 2.017;
+$VERSION = 2.018;
 
 use vars qw( @ISA @EXPORT @EXPORT_OK );
 
@@ -19,7 +19,7 @@ use constant UK  => 1;
 
 use constant DEBUG => 0;
 use constant DEBUG_HTML => 0;
-use constant DEBUG_NEXT => 1;
+use constant DEBUG_NEXT => 0;
 
 require Exporter;
 
@@ -145,6 +145,7 @@ L<perl>, L<LWP::UserAgent>, L<amazonwish>
 =cut
 
 my $USER_AGENT = 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)';
+my $sBase = q'http://www.amazon.com';
 
 sub get_list {
   # Required arg = wishlist ID:
@@ -159,12 +160,13 @@ sub get_list {
   # set up some variables
   my $iPage = 1;
   my @items;
+  my $url;
   # and awaaaaaaaaaaaaay we go ....
  INFINITE:
   while (1)
     {
-    my $url = $uk ? "https://www.amazon.co.uk/gp/registry/wishlist/ref=cm_wl_search_1?page=$iPage&cid=$id" :
-    "http://www.amazon.com/gp/registry/wishlist/$id/?page=$iPage";
+    $url ||= $uk ? "https://www.amazon.co.uk/gp/registry/wishlist/ref=cm_wl_search_1?page=$iPage&cid=$id" :
+    "$sBase/gp/registry/wishlist/$id";
     # This is a typical complete .com URL as of 2008-12:
     # http://www.amazon.com/gp/registry/wishlist/2O4B95NPM1W3L
     DEBUG_HTML && warn " DDD fetching wishlist for $id, page $iPage...\n";
@@ -231,40 +233,15 @@ sub get_list {
       push @items, $item;
       DEBUG_HTML && warn " DDD added one item to \@items\n";
       } # foreach ITEM
-    my $sURLNext = $result->{next};
-    my $iNext = 0;
-    if (! defined $sURLNext)
-      {
-      # DEBUG_NEXT && warn " DDD no 'next' URL, content===$content===\n";
-      # exit 88;
-      # Use brute force to find it:
-      if ($content =~ m!([;&]page=\d+)">\s*(<[^>]+>)?\s*Next!)
-        {
-        DEBUG_NEXT && warn " DDD found next URL with brute force\n";
-        $sURLNext = $1;
-        } # if
-      } # if
-    # Paranoia:
-    if ( ! defined $sURLNext)
+    # Assumes an absolute path without hostname:
+    if ( ! defined $result->{next})
       {
       DEBUG_NEXT && warn " WWW did not find next url\n";
       DEBUG_NEXT && write_file(qq'Pages/no-next.html', $content);
       last INFINITE;
       } # if
-    if ($sURLNext !~ m/[;&]page=(\d+)/)
-      {
-      DEBUG_NEXT && warn " WWW next url =$sURLNext= does not contain page#\n";
-      # last INFINITE;
-      } # if
-    $iNext = $1;
-    # More paranoia:
-    if ($iNext <= $iPage)
-      {
-      DEBUG_NEXT && warn " WWW next url page=$iNext is not greater than current page=$iPage\n";
-      last INFINITE;
-      } # if
-    # ...and update:
-    $iPage = $iNext;
+    $url = $sBase . $result->{next};
+    $iPage++;
     } # while INFINITE
   return @items;
   } # get_list
