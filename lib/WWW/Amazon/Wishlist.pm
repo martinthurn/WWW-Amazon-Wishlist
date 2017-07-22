@@ -1,7 +1,12 @@
 
 package WWW::Amazon::Wishlist;
 
+use warnings;
 use strict;
+
+our
+$VERSION = 2.017;
+
 use vars qw( @ISA @EXPORT @EXPORT_OK );
 
 use Carp;
@@ -14,7 +19,7 @@ use constant UK  => 1;
 
 use constant DEBUG => 0;
 use constant DEBUG_HTML => 0;
-use constant DEBUG_NEXT => 0;
+use constant DEBUG_NEXT => 1;
 
 require Exporter;
 
@@ -26,9 +31,6 @@ require Exporter;
         UK
         COM
 );
-
-our
-$VERSION = 2.016;
 
 =pod
 
@@ -182,7 +184,9 @@ sub get_list {
     if (9 < $test)
       {
       eval "use File::Slurp";
-      write_file(qq'Pages/fetched-$domain.html', $content);
+      my $sFname = qq'Pages/fetched-$domain.html';
+      write_file($sFname, $content);
+      warn " DDD wrote HTML to $sFname\n";
       exit 88;
       } # if
     my $iLen = length($content);
@@ -250,7 +254,7 @@ sub get_list {
     if ($sURLNext !~ m/[;&]page=(\d+)/)
       {
       DEBUG_NEXT && warn " WWW next url =$sURLNext= does not contain page#\n";
-      last INFINITE;
+      # last INFINITE;
       } # if
     $iNext = $1;
     # More paranoia:
@@ -340,14 +344,11 @@ sub _extract {
   $oTree->parse($s);
   $oTree->eof;
   my $sTag = q/div/;
-  my $sClass = q/a-text-left a-fixed-left-grid-col a-col-right/;
-  my @aoSPAN = $iUK ? $oTree->look_down(_tag => $sTag,
-                                        class => 'a-text-left a-fixed-left-grid-col a-col-right',
-                                        # class => 'lineItemGroup',
-                                       )
-                    : $oTree->look_down(_tag => $sTag,
-                                        class => $sClass,
-                                       );
+  my $sClass = q/a-fixed-left-grid a-spacing-none/;
+  $sClass = 'a-text-left a-fixed-left-grid-col a-col-right' if $iUK;
+  my @aoSPAN = $oTree->look_down(_tag => $sTag,
+				 class => $sClass,
+      );
   my $iCountSPAN = scalar(@aoSPAN);
   DEBUG_HTML && warn " DDD _extract() found $iCountSPAN $sTag tags of class '$sClass'\n";
  SPAN_TAG:
@@ -394,7 +395,7 @@ sub _extract {
           ||
           ($sURL =~ m!/gp/product/(.+?)/ref!)
           ||
-          ($sURL =~ m!/dp/(.+?)/ref!)
+          ($sURL =~ m!/dp/(.+?)/(_encoding|ref)!)
          )
         {
         # It's a match!
@@ -568,12 +569,15 @@ sub _extract {
     } # foreach SPAN_TAG
   # Look for the next-page link:
   my @aoA = $oTree->look_down(_tag => 'a',
-                              sub
-                                {
-                                return 0 if (length($_[0]->attr('href')) < 5);
-                                my $s = $_[0]->as_text || q{};
+			      role => 'link',
+                              sub {
+                                return 0 if (length($_[0]->attr('href')) < 55);
+                                # my $s = $_[0]->as_text || q{};
                                 # DEBUG_NEXT && warn " DDD _extract():   try next <A> ==$s==\n";
-                                $s =~ m/\A\s*NEXT/i;
+                                # $s =~ m/\A\s*(NEXT|SEE\s+MORE)\s*\z/i;
+				my $s = $_[0]->attr('class');
+				DEBUG_NEXT && warn " DDD _extract():   try next <A> ==$s==\n";
+				$s =~ m/wl-see-more/
                                 },
                              );
   my $iCountA = scalar(@aoA);
@@ -593,7 +597,7 @@ sub _extract {
 
 sub _match_priority {
   my $s = shift || return;
-  if ($s =~ m'.+PRIORITY:?\s*(\w+?)(\s|\z)'i)
+  if ($s =~ m'PRIORITY:?\s*(\w+?)(\s|\z)'i)
     {
     return lc $1;
     } # if
